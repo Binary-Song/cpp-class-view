@@ -1,228 +1,351 @@
 import * as vscode from 'vscode';
 import { ClangTools } from './ClangTools';
+import { ExtensionInterface } from './ExtensionInterface';
+import { ClassModel, FieldModel, MethodModel } from './ClassModel';
 
 
-// 节点中的数据。不包含 parent 指针。
-export interface IData {
-    getChildren(): IData[];
-
-    label: string;
-    description?: string;
-    icon?: string;
-    collapsibleState?: vscode.TreeItemCollapsibleState;
-}
-
-export class List<T extends IData> implements IData {
-
-    items: T[];
-    label: string;
-    description?: string;
-    icon?: any;
-
-    constructor(label: string, items: T[], description?: string, icon?: any) {
-        this.label = label;
-        this.description = description;
-        this.items = items;
-        this.icon = icon;
-    }
-
-    getChildren(): IData[] { return this.items; }
-}
-
-export interface IClassExtraData
-{
-}
-
-export class Class implements IData {
-    name: string;
-    methods: Method[];
-    fields: Field[];
-    icon: string;
-    extra: IClassExtraData;
-
-    constructor(name: string, methods: Method[], fields: Field[], extra: IClassExtraData) {
-        this.name = name;
-        this.methods = methods;
-        this.fields = fields;
-        this.icon = "symbol-class";
-        this.extra = extra;
-    }
-
-    get label() {
-        return this.name;
-    }
-
-    get description() {
-        return "";
-    }
-
-    getChildren(): IData[] {
-        let children: IData[] = [];
-        return children.concat(this.methods, this.fields);
-    }
-}
-
-export interface IMethodExtraData {
-    virtual?: boolean;
-    pure?: boolean;
-    constexpr?: boolean;
-    type?: {
-        qualType?: string;
-    };
-}
-
-export class Method implements IData {
-
-    name: string;
-    collapsibleState: vscode.TreeItemCollapsibleState;
-    icon: string;
-    extra: IMethodExtraData;
-
-    constructor(name: string, extra: IMethodExtraData) {
-        this.name = name;
-        this.icon = "symbol-method";
-        this.extra = extra;
-        this.collapsibleState = vscode.TreeItemCollapsibleState.None;
-    }
-
-    get label(): string {
-        return `${this.name}`;
-    }
-
-    get description(): string {
-        let desc = "";
-        if (this.extra.pure) {
-            desc += "[pure] ";
+export class ViewContext {
+    private views = new Map<IView, string>();
+    private digests = new Map<string, number>();
+    get_or_create_id(view: IView): string {
+        if (this.views.has(view)) {
+            return this.views.get(view) ?? "";
         }
-        if (this.extra.virtual) {
-            desc += "[virtual] ";
+        if (this.digests.has(view.digest)) {
+            let num = this.digests.get(view.digest) ?? 1;
+            num += 1;
+            this.digests.set(view.digest, num);
+            const id = `${view.digest} (${num})`;
+            this.views.set(view, id);
+            return id;
+        } else {
+            this.digests.set(view.digest, 1);
+            const id = `${view.digest} (1)`;
+            this.views.set(view, id);
+            return id;
         }
-        if (this.extra.constexpr) {
-            desc += "[constexpr] ";
-        }
-        if (this.extra.type) {
-            desc += (this.extra.type.qualType  ?? "");
-        }
-        return desc.trim();
-    }
-
-    getChildren(): IData[] {
-        return [];
     }
 }
 
-export class Field implements IData {
-
-    name: string;
-    collapsibleState: vscode.TreeItemCollapsibleState;
-    icon: string;
-
-    constructor(name: string) {
-        this.name = name;
-        this.icon = "symbol-field";
-        this.collapsibleState = vscode.TreeItemCollapsibleState.None;
-    }
-
-    get label(): string {
-        return `${this.name}`;
-    }
-
-    getChildren(): IData[] {
-        return [];
-    }
+export interface IView {
+    get children(): IView[];
+    get collapsibleState(): vscode.TreeItemCollapsibleState;
+    get description(): string;
+    get id(): string;
+    get digest(): string;
+    get icon(): string;
+    get label(): string;
+    get viewContext(): ViewContext;
+    get treeItem(): vscode.TreeItem;
 }
 
-// 树上的结点。包含 parent 指针。只用来包装 IData 。
-// 子节点一般需要时才生成。
-export interface INode {
-    getId(): string;
-    getTreeItem(): vscode.TreeItem;
-    getChildren(): Thenable<INode[]>;
-}
-
-export class Node<T extends IData> implements INode {
-
-    parent: INode | undefined;
-    data: T;
-    index: number;
-
-    constructor(parent: INode | undefined, index: number, data: T) {
-        this.parent = parent;
-        this.data = data;
-        this.index = index;
+export abstract class BasicView implements IView {
+    abstract get children(): IView[];
+    abstract get digest(): string;
+    abstract get description(): string;
+    abstract get icon(): string;
+    abstract get label(): string;
+    abstract get viewContext(): ViewContext;
+    get collapsibleState(): vscode.TreeItemCollapsibleState {
+        if (this.children.length > 0) {
+            return vscode.TreeItemCollapsibleState.Collapsed;
+        }
+        return vscode.TreeItemCollapsibleState.None;
     }
-
-    getId(): string {
-        return `${this.parent?.getId() ?? ""}/${this.index}`;
+    get id(): string {
+        return this.viewContext.get_or_create_id(this);
     }
-
-    getTreeItem(): vscode.TreeItem {
+    get treeItem(): vscode.TreeItem {
         return {
-            resourceUri:  vscode.Uri.file("E:/cpp-class-view/README.md"),
-            label: this.data.label,
-            description: this.data.description,
-            id: this.getId(),
-            iconPath: this.data.icon ? new vscode.ThemeIcon(this.data.icon) : undefined,
-            collapsibleState: this.data.collapsibleState ?? vscode.TreeItemCollapsibleState.Collapsed
+            label: this.label,
+            id: this.id,
+            iconPath: new vscode.ThemeIcon(this.icon),
+            description: this.description,
+            collapsibleState: this.collapsibleState,
         };
     }
+}
 
-    getChildren(): Thenable<INode[]> {
-        const children = this.data.getChildren();
-        return Promise.resolve(children.map((child, index) => new Node(this, index, child)));
+export class MethodView extends BasicView {
+
+    constructor(private model: MethodModel, public viewContext: ViewContext) {
+        super();
+    }
+    get digest() {
+        return `method(${this.model.name}, ${this.model.extra.type?.qualType})`;
+    }
+    get children(): IView[] {
+        return [];
+    }
+    get description(): string {
+        return this.model.extra.type?.qualType ?? "";
+    }
+    get icon(): string {
+        return "symbol-method";
+    }
+    get label(): string {
+        return this.model.name;
     }
 }
 
-export class ClassViewDataProvider implements vscode.TreeDataProvider<INode> {
+export class FieldView extends BasicView {
+    constructor(private model: FieldModel, public viewContext: ViewContext) {
+        super();
+    }
+    get digest() {
+        return `field(${this.model.name})`;
+    }
+    get children(): IView[] {
+        return [];
+    }
+    get description(): string {
+        return "";
+    }
+    get icon(): string {
+        return "symbol-field";
+    }
+    get label(): string {
+        return this.model.name;
+    }
+}
 
-    compiler: ClangTools;
+export class ClassView extends BasicView {
 
-    constructor(compiler: ClangTools) {
-        this.compiler = compiler;
+    constructor(private model: ClassModel, public viewContext: ViewContext) {
+        super();
+    }
+    get digest() {
+        return `class(${this.model.name})`;
+    }
+    get children(): IView[] {
+
+        const fields: IView[] = this.model.fields.map(field => new FieldView(field, this.viewContext));
+
+        const methods: IView[] = this.model.methods.map(method => new MethodView(method, this.viewContext));
+
+        return fields.concat(methods);
+    }
+    get description(): string {
+        return "";
+    }
+    get icon(): string {
+        return "symbol-class";
+    }
+    get label(): string {
+        return this.model.name;
+    }
+}
+
+export class ClassListView extends BasicView {
+    constructor(private classModels: ClassModel[], public viewContext: ViewContext, private flat = false,) {
+        super();
+    }
+    get digest() {
+        return `classes`;
+    }
+    get children(): IView[] {
+        let members: IView[] = [];
+        let index = 0;
+        if (this.flat) {
+            for (const classModel of this.classModels) {
+                for (const fieldModel of classModel.fields) {
+                    members.push(new FieldView(fieldModel, this.viewContext));
+                }
+                for (const methodModel of classModel.methods) {
+                    members.push(new MethodView(methodModel, this.viewContext));
+                }
+            }
+            return members;
+        } else {
+            return this.classModels.map((classModel, idx) => new ClassView(classModel, this.viewContext));
+        }
+    }
+    get description(): string {
+        return "";
+    }
+    get icon(): string {
+        return "";
+    }
+    get label(): string {
+        return "";
+    }
+}
+
+export class ErrorMessageView extends BasicView {
+
+    constructor(public message: string, public viewContext: ViewContext) {
+        super();
+    }
+    get digest() {
+        return "error";
+    }
+    get children(): IView[] {
+        return [];
+    }
+    get description(): string {
+        return "";
+    }
+    get icon(): string {
+        return "error";
+    }
+    get label(): string {
+        return this.message;
+    }
+    get treeItem(): vscode.TreeItem {
+        let item = super.treeItem;
+        item.command = {
+            title: "Go to output",
+            command: "cpp-class-view.showOutputPanel",
+        };
+        item.tooltip = this.message + "\n" + "Click to go to output.";
+        return item;
+    }
+}
+
+export class ViewList extends BasicView {
+
+    subViews: IView[] = [];
+
+    constructor(public viewContext: ViewContext) {
+        super();
+    }
+    addChild(view: IView) {
+        this.subViews.push(view);
+    }
+    get digest() {
+        return "viewlist";
+    }
+    get children(): IView[] {
+        return this.subViews;
+    }
+    get description(): string {
+        return "";
+    }
+    get icon(): string {
+        return "";
+    }
+    get label(): string {
+        return "";
+    }
+}
+
+export class ClassViewDataProvider implements vscode.TreeDataProvider<IView> {
+
+    private hardReset = true;
+    public flat = false;
+    private rootView: IView | undefined;
+
+    constructor(
+        private compiler: ClangTools,
+        private ext: ExtensionInterface) {
     }
 
-    getTreeItem(element: INode): vscode.TreeItem {
-        return element.getTreeItem();
+    getTreeItem(element: IView): vscode.TreeItem {
+        return element.treeItem;
     }
 
-    async getRootItem(): Promise<INode[]> {
-        const ast_str = await this.compiler.compile(["E:/cpp-class-view/test.cpp"]);
+    async handleRecordDecl(recordDecl: any) {
+        let methods: MethodModel[] = [];
+        let fields: FieldModel[] = [];
+        if (!recordDecl.inner) {
+            return undefined;
+        }
+        for (let member of recordDecl.inner) {
+            if (member.kind === "CXXMethodDecl") {
+                const memberName = member.name as string;
+                let demangledName = await this.compiler.demangle(member.mangledName);
+                demangledName = (demangledName ?? memberName);
+                methods.push(new MethodModel(demangledName.trim(), member));
+            } else if (member.kind === "FieldDecl") {
+                fields.push(new FieldModel(member.name ?? ""));
+            }
+        }
+        return new ClassModel(recordDecl.name ?? "", methods, fields, recordDecl);
+    }
+
+    createError(text: string) {
+        let list = new ViewList(new ViewContext());
+        let error = new ErrorMessageView(text, new ViewContext());
+        list.addChild(error);
+        return list;
+    }
+
+    async updateClassList(): Promise<IView> {
+        const file = vscode.window.activeTextEditor?.document.uri.fsPath;
+        if (!file) {
+            return this.createError("Active document does not exist or is not a file.");
+        }
+        if (vscode.window.activeTextEditor?.document.languageId !== "cpp") {
+            return this.createError("Active document is not a C++ file.");
+        }
+        const cdb_path = this.compiler.findCompilationDatabase(file);
+        if (!cdb_path) {
+            return this.createError("Compilation database not found.");
+        }
+        this.ext.writeOutput("Using compilation database: " + cdb_path);
+        const args = this.compiler.getCompileArgs(cdb_path, file);
+        if (!args) {
+            return this.createError("Compilation database not found.");
+        }
+        const ast_str = await this.compiler.compile(args);
         if (!ast_str) {
-            return [];
+            return this.createError("Failed to compile source file.");
         }
         const ast = JSON.parse(ast_str);
         if (!ast) {
-            return [];
+            return this.createError("Clang did not output valid json data.");
         }
         if (ast.kind !== "TranslationUnitDecl") {
-            return [];
+            return this.createError(`Expected TranslationUnitDecl, got ${ast.kind}.`);
         }
-        let classList: Class[] = [];
-        ast.inner?.forEach((node: any) => {
+        let classList: ClassModel[] = [];
+        if (!ast.inner) {
+            return this.createError(`No inner structure in TranslationUnitDecl.`);
+        }
+        let idx = -1;
+        for (let node of ast.inner) {
+            idx++;
             if (node.kind === "CXXRecordDecl") {
-                const isImplicit = node.isImplicit ?? false;
-
-                let methods: Method[] = [];
-                let fields: Field[] = [];
-                node.inner?.forEach((member: any) => {
-                    if (member.kind === "CXXMethodDecl") {
-                        methods.push(new Method(member.name ?? "@unnamed", member));
-                    } else if (member.kind === "FieldDecl") {
-                        fields.push(new Field(member.name ?? "@unnamed"));
-                    }
-                });
-                classList.push(new Class(node.name ?? "@unnamed", methods, fields, node));
+                const newClass = await this.handleRecordDecl(node);
+                if (newClass) {
+                    classList.push(newClass);
+                }
             }
-        });
-        return classList.map((classData, idx) => new Node(undefined, idx, classData));
+        }
+        return new ClassListView(classList, new ViewContext(), this.flat);
     }
 
-    getChildren(element?: INode): Thenable<INode[]> {
-        this.compiler.compile(["E:/cpp-class-view/test.cpp"]);
+    async getChildren(element?: IView): Promise<IView[]> {
         if (element) {
-            return element.getChildren();
+            return Promise.resolve(element.children);
         } else {
-            return this.getRootItem();
+            if (this.hardReset) {
+                this.rootView = await this.updateClassList();
+            }
+            return this.rootView?.children ?? [];
         }
+    }
+
+    private _onDidChangeTreeData: vscode.EventEmitter<IView | undefined | null | void> = new vscode.EventEmitter<IView | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<IView | undefined | null | void> = this._onDidChangeTreeData.event;
+
+    refresh() {
+        this._onDidChangeTreeData.fire();
+    }
+
+    flatten() {
+        this.hardReset = false;
+        this.flat = true;
+        this.refresh();
+        this.hardReset = true;
+        vscode.commands.executeCommand('setContext', 'cpp-class-view.classView.isFlattened', this.flat);
+    }
+
+    unflatten() {
+        this.hardReset = false;
+        this.flat = false;
+        this.refresh();
+        this.hardReset = true;
+        vscode.commands.executeCommand('setContext', 'cpp-class-view.classView.isFlattened', this.flat);
     }
 }

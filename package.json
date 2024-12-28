@@ -14,15 +14,66 @@
   "contributes": {
     "commands": [
       {
-        "command": "cpp-class-view.helloWorld",
-        "title": "Hello World"
+        "command": "cpp-class-view.showOutputPanel",
+        "title": "Show Output"
+      },
+      {
+        "command": "cpp-class-view.refresh",
+        "title": "Refresh Class View",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "cpp-class-view.classView.unflatten",
+        "title": "Unflatten Class View",
+        "icon": "$(list-flat)"
+      },
+      {
+        "command": "cpp-class-view.classView.flatten",
+        "title": "Flatten Class View",
+        "icon": "$(list-tree)"
       }
     ],
-    "views": {
-      "explorer": [
+    "viewsContainers": {
+      "activitybar": [
         {
-          "id": "classView",
-          "name": "Class View"
+          "id": "cppClassView",
+          "title": "Class View",
+          "icon": "$(type-hierarchy-sub)"
+        }
+      ]
+    },
+    "views": {
+      "cppClassView": [
+        {
+          "id": "cpp-class-view.classView.classes",
+          "name": "Classes",
+          "icon": "$(list-tree)"
+        },
+        {
+          "id": "cpp-class-view.classView.details",
+          "name": "Details",
+          "icon": "$(list-flat)"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "cpp-class-view.refresh",
+          "when": "view == cpp-class-view.classView.classes",
+          "group": "navigation"
+        },
+        {
+          "command": "cpp-class-view.classView.unflatten",
+          "icon": "$(list-flat)",
+          "when": "cpp-class-view.classView.isFlattened",
+          "group": "navigation@1"
+        },
+        {
+          "command": "cpp-class-view.classView.flatten",
+          "icon": "$(list-tree)",
+          "when": "!cpp-class-view.classView.isFlattened",
+          "group": "navigation@1"
         }
       ]
     },
@@ -45,10 +96,8 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/ffi-napi": "^4.0.10",
     "@types/mocha": "^10.0.9",
     "@types/node": "20.x",
-    "@types/stream-buffers": "^3.0.7",
     "@types/vscode": "^1.96.0",
     "@typescript-eslint/eslint-plugin": "^8.10.0",
     "@typescript-eslint/parser": "^8.7.0",
@@ -58,9 +107,6 @@
     "typescript": "^5.6.3"
   },
   "dependencies": {
-    "ffi-napi": "^4.0.3",
-    "ref-array-napi": "^1.2.2",
-    "ref-napi": "^3.0.3",
-    "stream-buffers": "^3.0.3"
+    "split-cmd": "^1.1.0"
   }
 }

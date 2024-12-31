@@ -83,15 +83,15 @@ export async function activate(context: vscode.ExtensionContext) {
 	vscode.commands.registerCommand('cpp-class-view.refresh', () =>
 		classViewDataProvider.refresh()
 	);
-	vscode.commands.registerCommand('cpp-class-view.classView.flatten', () => {
-		classViewDataProvider.flatten();
-	}
+	vscode.commands.registerCommand('cpp-class-view.classView.flatten', () =>
+		classViewDataProvider.flatten()
 	);
-	vscode.commands.registerCommand('cpp-class-view.classView.unflatten', () => {
-		classViewDataProvider.unflatten();
-	}
+	vscode.commands.registerCommand('cpp-class-view.classView.unflatten', () =>
+		classViewDataProvider.unflatten()
 	);
-	vscode.commands.executeCommand('setContext', 'cpp-class-view.classView.isFlattened', classViewDataProvider.flat);
+	vscode.commands.registerCommand('cpp-class-view.classView.toggleInherited', () =>
+		classViewDataProvider.setShowInherited(classViewDataProvider.showInherited)
+	);
 }
 
 export function deactivate() { }

@@ -14,10 +14,6 @@
   "contributes": {
     "commands": [
       {
-        "command": "cpp-class-view.showOutputPanel",
-        "title": "Show Output"
-      },
-      {
         "command": "cpp-class-view.refresh",
         "title": "Refresh Class View",
         "icon": "$(refresh)"
@@ -31,6 +27,12 @@
         "command": "cpp-class-view.classView.flatten",
         "title": "Flatten Class View",
         "icon": "$(list-tree)"
+      },
+      {
+        "command": "cpp-class-view.classView.toggleInherited",
+        "title": "Show Inherited",
+        "category": "fuck/you",
+        "enablement": "cpp-class-view.classView.isInheritedShown"
       }
     ],
     "viewsContainers": {
@@ -59,21 +61,18 @@
     "menus": {
       "view/title": [
         {
-          "command": "cpp-class-view.refresh",
-          "when": "view == cpp-class-view.classView.classes",
-          "group": "navigation"
-        },
-        {
           "command": "cpp-class-view.classView.unflatten",
-          "icon": "$(list-flat)",
-          "when": "cpp-class-view.classView.isFlattened",
+          "when": "view == cpp-class-view.classView.classes && cpp-class-view.classView.isFlattened",
           "group": "navigation@1"
         },
         {
           "command": "cpp-class-view.classView.flatten",
-          "icon": "$(list-tree)",
-          "when": "!cpp-class-view.classView.isFlattened",
+          "when": "view == cpp-class-view.classView.classes && !cpp-class-view.classView.isFlattened",
           "group": "navigation@1"
+        },
+        {
+          "command": "cpp-class-view.classView.toggleInherited",
+          "when": "view == cpp-class-view.classView.classes"
         }
       ]
     },

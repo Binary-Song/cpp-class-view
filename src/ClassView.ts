@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ClangTools } from './ClangTools';
 import { ExtensionInterface } from './ExtensionInterface';
 import { ClassModel, FieldModel, MethodModel } from './ClassModel';
+import { ASTWalker } from './ASTWalker';
 
 
 export class ViewContext {
@@ -78,7 +79,12 @@ export class MethodView extends BasicView {
         return [];
     }
     get description(): string {
-        return this.model.extra.type?.qualType ?? "";
+        if (this.model.extra.isDtor) {
+            return "destructor";
+        } else if (this.model.extra.isCtor) {
+            return "constructor";
+        }
+        return "method";
     }
     get icon(): string {
         return "symbol-method";
@@ -111,20 +117,32 @@ export class FieldView extends BasicView {
 
 export class ClassView extends BasicView {
 
-    constructor(private model: ClassModel, public viewContext: ViewContext) {
+    constructor(private model: ClassModel,
+        private allClasses: ClassModel[],
+        public viewContext: ViewContext,
+        public includeInherited: boolean) {
         super();
     }
     get digest() {
         return `class(${this.model.name})`;
     }
     get children(): IView[] {
+        let fieldModels = this.model.fields;
+        let methodModels = this.model.methods;
 
-        const fields: IView[] = this.model.fields.map(field => new FieldView(field, this.viewContext));
+        if (this.includeInherited) {
+            for (const baseClass of this.model.getBasesRecursive(this.allClasses)) {
+                fieldModels = fieldModels.concat(baseClass.fields);
+                methodModels = methodModels.concat(baseClass.methods);
+            }
+        }
 
-        const methods: IView[] = this.model.methods.map(method => new MethodView(method, this.viewContext));
-
-        return fields.concat(methods);
+        let fields: IView[] = fieldModels.map(field => new FieldView(field, this.viewContext)).sort((a, b) => a.label.localeCompare(b.label));
+        let methods: IView[] = methodModels.map(method => new MethodView(method, this.viewContext)).sort((a, b) => a.label.localeCompare(b.label));
+        let members = fields.concat(methods);
+        return members;
     }
+
     get description(): string {
         return "";
     }
@@ -132,12 +150,12 @@ export class ClassView extends BasicView {
         return "symbol-class";
     }
     get label(): string {
-        return this.model.name;
+        return this.model.fullName;
     }
 }
 
 export class ClassListView extends BasicView {
-    constructor(private classModels: ClassModel[], public viewContext: ViewContext, private flat = false,) {
+    constructor(private classModels: ClassModel[], public viewContext: ViewContext, private flat = false, private showInherited = false) {
         super();
     }
     get digest() {
@@ -145,19 +163,20 @@ export class ClassListView extends BasicView {
     }
     get children(): IView[] {
         let members: IView[] = [];
-        let index = 0;
         if (this.flat) {
             for (const classModel of this.classModels) {
-                for (const fieldModel of classModel.fields) {
-                    members.push(new FieldView(fieldModel, this.viewContext));
-                }
-                for (const methodModel of classModel.methods) {
-                    members.push(new MethodView(methodModel, this.viewContext));
-                }
+                const view = new ClassView(classModel, this.classModels, this.viewContext, this.showInherited);
+                let cur_members = view.children;
+                members = members.concat(cur_members, view.children);
             }
+            members = members.sort((a, b) => a.label.localeCompare(b.label));
             return members;
         } else {
-            return this.classModels.map((classModel, idx) => new ClassView(classModel, this.viewContext));
+            return this.classModels.map(
+                classModel => {
+                    return new ClassView(classModel, this.classModels, this.viewContext, this.showInherited);
+                }
+            ).sort((a, b) => a.label.localeCompare(b.label));
         }
     }
     get description(): string {
@@ -233,34 +252,16 @@ export class ClassViewDataProvider implements vscode.TreeDataProvider<IView> {
 
     private hardReset = true;
     public flat = false;
+    public showInherited = false;
     private rootView: IView | undefined;
 
     constructor(
-        private compiler: ClangTools,
+        private tools: ClangTools,
         private ext: ExtensionInterface) {
     }
 
     getTreeItem(element: IView): vscode.TreeItem {
         return element.treeItem;
-    }
-
-    async handleRecordDecl(recordDecl: any) {
-        let methods: MethodModel[] = [];
-        let fields: FieldModel[] = [];
-        if (!recordDecl.inner) {
-            return undefined;
-        }
-        for (let member of recordDecl.inner) {
-            if (member.kind === "CXXMethodDecl") {
-                const memberName = member.name as string;
-                let demangledName = await this.compiler.demangle(member.mangledName);
-                demangledName = (demangledName ?? memberName);
-                methods.push(new MethodModel(demangledName.trim(), member));
-            } else if (member.kind === "FieldDecl") {
-                fields.push(new FieldModel(member.name ?? ""));
-            }
-        }
-        return new ClassModel(recordDecl.name ?? "", methods, fields, recordDecl);
     }
 
     createError(text: string) {
@@ -278,41 +279,34 @@ export class ClassViewDataProvider implements vscode.TreeDataProvider<IView> {
         if (vscode.window.activeTextEditor?.document.languageId !== "cpp") {
             return this.createError("Active document is not a C++ file.");
         }
-        const cdb_path = this.compiler.findCompilationDatabase(file);
+        const cdb_path = this.tools.findCompilationDatabase(file);
         if (!cdb_path) {
             return this.createError("Compilation database not found.");
         }
         this.ext.writeOutput("Using compilation database: " + cdb_path);
-        const args = this.compiler.getCompileArgs(cdb_path, file);
+        const args = this.tools.getCompileArgs(cdb_path, file);
         if (!args) {
             return this.createError("Compilation database not found.");
         }
-        const ast_str = await this.compiler.compile(args);
+        const ast_str = await this.tools.compile(args);
         if (!ast_str) {
             return this.createError("Failed to compile source file.");
         }
+
         const ast = JSON.parse(ast_str);
         if (!ast) {
             return this.createError("Clang did not output valid json data.");
         }
-        if (ast.kind !== "TranslationUnitDecl") {
-            return this.createError(`Expected TranslationUnitDecl, got ${ast.kind}.`);
+
+        const astWalker = new ASTWalker(this.tools);
+        const res = await astWalker.collectClasses(ast);
+        if (res.error_message) {
+            return this.createError(res.error_message);
         }
-        let classList: ClassModel[] = [];
-        if (!ast.inner) {
-            return this.createError(`No inner structure in TranslationUnitDecl.`);
+        if (res.result === undefined) {
+            return this.createError("Unknown error.");
         }
-        let idx = -1;
-        for (let node of ast.inner) {
-            idx++;
-            if (node.kind === "CXXRecordDecl") {
-                const newClass = await this.handleRecordDecl(node);
-                if (newClass) {
-                    classList.push(newClass);
-                }
-            }
-        }
-        return new ClassListView(classList, new ViewContext(), this.flat);
+        return new ClassListView(res.result, new ViewContext(), this.flat);
     }
 
     async getChildren(element?: IView): Promise<IView[]> {
@@ -347,5 +341,13 @@ export class ClassViewDataProvider implements vscode.TreeDataProvider<IView> {
         this.refresh();
         this.hardReset = true;
         vscode.commands.executeCommand('setContext', 'cpp-class-view.classView.isFlattened', this.flat);
+    }
+
+    setShowInherited(show: boolean) {
+        this.hardReset = false;
+        this.showInherited = show;
+        this.refresh();
+        this.hardReset = true;
+	    vscode.commands.executeCommand('setContext', 'cpp-class-view.classView.isInheritedShown', show);
     }
 }

@@ -9,70 +9,27 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+  ],
   "main": "./out/extension.js",
   "contributes": {
-    "commands": [
-      {
-        "command": "cpp-class-view.refresh",
-        "title": "Refresh Class View",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "cpp-class-view.classView.unflatten",
-        "title": "Unflatten Class View",
-        "icon": "$(list-flat)"
-      },
-      {
-        "command": "cpp-class-view.classView.flatten",
-        "title": "Flatten Class View",
-        "icon": "$(list-tree)"
-      },
-      {
-        "command": "cpp-class-view.classView.toggleInherited",
-        "title": "Show Inherited",
-        "category": "fuck/you",
-        "enablement": "cpp-class-view.classView.isInheritedShown"
-      }
-    ],
+    "commands": [],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "cppClassView",
-          "title": "Class View",
+          "id": "cppInfoViews",
+          "title": "C++ Info Views",
           "icon": "$(type-hierarchy-sub)"
         }
       ]
     },
     "views": {
-      "cppClassView": [
+      "cppInfoViews": [
         {
-          "id": "cpp-class-view.classView.classes",
-          "name": "Classes",
-          "icon": "$(list-tree)"
-        },
-        {
-          "id": "cpp-class-view.classView.details",
-          "name": "Details",
-          "icon": "$(list-flat)"
-        }
-      ]
-    },
-    "menus": {
-      "view/title": [
-        {
-          "command": "cpp-class-view.classView.unflatten",
-          "when": "view == cpp-class-view.classView.classes && cpp-class-view.classView.isFlattened",
-          "group": "navigation@1"
-        },
-        {
-          "command": "cpp-class-view.classView.flatten",
-          "when": "view == cpp-class-view.classView.classes && !cpp-class-view.classView.isFlattened",
-          "group": "navigation@1"
-        },
-        {
-          "command": "cpp-class-view.classView.toggleInherited",
-          "when": "view == cpp-class-view.classView.classes"
+          "id": "cpp-class-view.classView",
+          "type": "webview",
+          "name": "Class View",
+          "icon": "$(symbol-class)"
         }
       ]
     },

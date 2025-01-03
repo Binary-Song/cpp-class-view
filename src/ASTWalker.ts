@@ -1,6 +1,6 @@
 import { strict } from "assert";
 import { ClangTools } from "./ClangTools";
-import { ClassModel, MethodModel, FieldModel } from "./ClassModel";
+import { ClassModel, MethodModel, FieldModel } from "./TranslationUnitModel";
 
 
 export type ASTWalkResult<Result> = { result?: Result; error_message?: string };

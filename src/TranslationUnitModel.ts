@@ -107,3 +107,7 @@ export class ClassModel {
         return classes;
     }
 }
+
+export class TranslationUnitModel {
+    constructor(public classes: ClassModel[]) { }
+}

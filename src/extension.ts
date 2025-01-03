@@ -56,13 +56,11 @@ class ExtensionMain implements ExtensionInterface {
 		this.tools = clangTools as ClangTools;
 	}
 
-	private createError(text: string): { type: "error", text: string } {
-		return { type: "error", text: text };
+	private createError(text: string): TranslationUnitModel {
+		return { type: "err", err: text };
 	}
 
-	async getModel(): Promise<
-		{ type: "error", text: string } |
-		{ type: "result", model: TranslationUnitModel }> {
+	async getModel(): Promise<TranslationUnitModel> {
 		const file = vscode.window.activeTextEditor?.document.uri.fsPath;
 		if (!file) {
 			return this.createError("Active document does not exist or is not a file.");
@@ -97,7 +95,7 @@ class ExtensionMain implements ExtensionInterface {
 		if (res.result === undefined) {
 			return this.createError("Unknown error.");
 		}
-		return { type: "result", model: new TranslationUnitModel(res.result) };
+		return { type: "ok", val: res.result };
 	}
 
 	showOutputPanel() {
@@ -115,8 +113,9 @@ export async function activate(context: vscode.ExtensionContext) {
 		await vscode.window.showErrorMessage(`Failed to initialize extension.`, "OK");
 		return;
 	}
+	const model_res = await ext.getModel();
 	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider("cpp-class-view.classView", new ClassViewWebViewProvider(context))
+		vscode.window.registerWebviewViewProvider("cpp-class-view.classView", new ClassViewWebViewProvider(context, model_res))
 	);
 }
 

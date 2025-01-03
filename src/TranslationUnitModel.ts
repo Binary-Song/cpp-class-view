@@ -108,6 +108,4 @@ export class ClassModel {
     }
 }
 
-export class TranslationUnitModel {
-    constructor(public classes: ClassModel[]) { }
-}
+export type TranslationUnitModel = { type: "err", err: string } | { type: "ok", val: ClassModel[] };

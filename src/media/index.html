@@ -7,15 +7,10 @@
     <title>Class View</title>
     <script src="{{vscode_elements_bundled_uri}}" type="module"></script>
     <link rel="stylesheet" type="text/css" href="{{codicon_css_path}}" id="vscode-codicon-stylesheet" />
-    <style>
-        vscode-icon {
-            --vscode-icon-foreground: red;
-        }
-    </style>
 </head>
 
 <body>
-    <vscode-tree id="main-tree">
+    <vscode-tree id="main-tree" indent-guides arrows>
     </vscode-tree>
     <script>
         const iconMappings = [
@@ -80,11 +75,6 @@
                                 }
                             `;
                         }
-                        // style.textContent = `
-                        //         vscode-icon[name="symbol-class"] {
-                        //             --vscode-icon-foreground: var(--vscode-symbolIcon-classForeground);
-                        //         }
-                        //     `;
                         root.appendChild(style);
                     }
                     break;

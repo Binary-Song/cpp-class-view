@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ClangTools } from './ClangTools';
 import { ExtensionInterface } from './ExtensionInterface';
-import { ClassViewWebViewProvider } from './ClassViewWebViewProvider';
+import { ClassViewProvider } from './ClassViewWebViewProvider';
 import { TranslationUnitModel } from './TranslationUnitModel';
 import { ASTWalker } from './ASTWalker';
 
@@ -95,6 +95,9 @@ class ExtensionMain implements ExtensionInterface {
 		if (res.result === undefined) {
 			return this.createError("Unknown error.");
 		}
+		for (const cls of res.result) {
+			cls.populateBaseMembers(res.result);
+		}
 		return { type: "ok", fileName: file, classes: res.result };
 	}
 
@@ -114,7 +117,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		return;
 	}
 	const model = await ext.getModel();
-	const webviewProv = await ClassViewWebViewProvider.create(context, model);
+	const webviewProv = await ClassViewProvider.create(context, model);
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider("cpp-class-view.classView", webviewProv)
 	);

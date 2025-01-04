@@ -35,6 +35,12 @@
           "type": "webview",
           "name": "Class View",
           "icon": "$(symbol-class)"
+        },
+        {
+          "id": "cpp-class-view.detailsView",
+          "type": "webview",
+          "name": "Details View",
+          "icon": "$(list-unordered)"
         }
       ]
     },
@@ -42,7 +48,8 @@
       "view/title": [
         {
           "command": "cpp-class-view.refreshClassView",
-          "group": "navigation"
+          "group": "navigation",
+          "when": "view == cpp-class-view.classView"
         }
       ]
     },

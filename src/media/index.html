@@ -5,15 +5,59 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Class View</title>
-    <style id="stylesheet"></style>
     <script src="{{vscode_elements_bundled_uri}}" type="module"></script>
-    <link rel="stylesheet" href="{{codicon_path}}" id="vscode-codicon-stylesheet" />
+    <link rel="stylesheet" type="text/css" href="{{codicon_css_path}}" id="vscode-codicon-stylesheet" />
+    <style>
+        vscode-icon {
+            --vscode-icon-foreground: red;
+        }
+    </style>
 </head>
 
 <body>
     <vscode-tree id="main-tree">
     </vscode-tree>
     <script>
+        const iconMappings = [
+            // symbols
+            ["symbol-array", "--vscode-symbolIcon-arrayForeground"],
+            ["symbol-boolean", "--vscode-symbolIcon-booleanForeground"],
+            ["symbol-class", "--vscode-symbolIcon-classForeground"],
+            ["symbol-color", "--vscode-symbolIcon-colorForeground"],
+            ["symbol-constant", "--vscode-symbolIcon-constantForeground"],
+            ["symbol-constructor", "--vscode-symbolIcon-constructorForeground"],
+            ["symbol-enumerator", "--vscode-symbolIcon-enumeratorForeground"],
+            ["symbol-enumeratorMember", "--vscode-symbolIcon-enumeratorMemberForeground"],
+            ["symbol-event", "--vscode-symbolIcon-eventForeground"],
+            ["symbol-field", "--vscode-symbolIcon-fieldForeground"],
+            ["symbol-file", "--vscode-symbolIcon-fileForeground"],
+            ["symbol-folder", "--vscode-symbolIcon-folderForeground"],
+            ["symbol-function", "--vscode-symbolIcon-functionForeground"],
+            ["symbol-interface", "--vscode-symbolIcon-interfaceForeground"],
+            ["symbol-key", "--vscode-symbolIcon-keyForeground"],
+            ["symbol-keyword", "--vscode-symbolIcon-keywordForeground"],
+            ["symbol-method", "--vscode-symbolIcon-methodForeground"],
+            ["symbol-module", "--vscode-symbolIcon-moduleForeground"],
+            ["symbol-namespace", "--vscode-symbolIcon-namespaceForeground"],
+            ["symbol-null", "--vscode-symbolIcon-nullForeground"],
+            ["symbol-number", "--vscode-symbolIcon-numberForeground"],
+            ["symbol-object", "--vscode-symbolIcon-objectForeground"],
+            ["symbol-operator", "--vscode-symbolIcon-operatorForeground"],
+            ["symbol-package", "--vscode-symbolIcon-packageForeground"],
+            ["symbol-property", "--vscode-symbolIcon-propertyForeground"],
+            ["symbol-reference", "--vscode-symbolIcon-referenceForeground"],
+            ["symbol-snippet", "--vscode-symbolIcon-snippetForeground"],
+            ["symbol-string", "--vscode-symbolIcon-stringForeground"],
+            ["symbol-struct", "--vscode-symbolIcon-structForeground"],
+            ["symbol-text", "--vscode-symbolIcon-textForeground"],
+            ["symbol-typeParameter", "--vscode-symbolIcon-typeParameterForeground"],
+            ["symbol-unit", "--vscode-symbolIcon-unitForeground"],
+            ["symbol-variable", "--vscode-symbolIcon-variableForeground"],
+            // others
+            ["error", "--vscode-problemsErrorIcon-foreground"]
+        ];
+
+
         const vscode = acquireVsCodeApi();
         window.addEventListener('message', event => {
             const message = event.data;
@@ -21,19 +65,38 @@
             switch (message.command) {
                 case 'update_data':
                     updateData(message);
+                    // fix: `vscode-icon`s are gray. This adds the color back.
+                    const target = document.getElementById("main-tree");
+                    if (target.shadowRoot) {
+                        console.log("setting icon color")
+                        const root = target.shadowRoot;
+                        const style = document.createElement('style');
+                        for (const iconMapping of iconMappings) {
+                            const iconName = iconMapping[0];
+                            const iconColorProperty = iconMapping[1];
+                            style.textContent += `
+                                vscode-icon[name="${iconName}"].theme-icon {
+                                    color: var(${iconColorProperty}) !important;
+                                }
+                            `;
+                        }
+                        // style.textContent = `
+                        //         vscode-icon[name="symbol-class"] {
+                        //             --vscode-icon-foreground: var(--vscode-symbolIcon-classForeground);
+                        //         }
+                        //     `;
+                        root.appendChild(style);
+                    }
                     break;
             }
         });
-
-        function updateStylesheet(content) {
-            const stylesheet = document.getElementById('stylesheet');
-            stylesheet.innerHTML = content;
-        }
-
         function updateData(msg) {
             const target = document.getElementById(msg.target);
             console.log("setting data = " + JSON.stringify(msg.data))
             target.data = msg.data;
+        }
+        function getIconName(iconPropertyName) {
+            return iconPropertyName.replace("--vscode-symbolIcon-", "").replace("Foreground", "");
         }
     </script>
 </body>

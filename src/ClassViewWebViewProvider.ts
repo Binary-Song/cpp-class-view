@@ -20,7 +20,7 @@ export class ClassViewWebViewProvider implements vscode.WebviewViewProvider {
         const node_modules = vscode.Uri.joinPath(context.extensionUri, 'node_modules');
         const html_replacements = new Map([
             ["vscode_elements_bundled_uri", vscode.Uri.joinPath(node_modules, '@vscode-elements/elements/dist/bundled.js')],
-            ["codicon_path", vscode.Uri.joinPath(node_modules, '@vscode/codicons/dist/codicon.css')],
+            ["codicon_css_path", vscode.Uri.joinPath(node_modules, '@vscode/codicons/dist/codicon.css')],
         ]);
         const codiconDir = vscode.Uri.joinPath(node_modules, '@vscode/codicons/src/icons');
         const cssFileContent = await ClassViewWebViewProvider.readMediaFile('style.css', context);
@@ -59,18 +59,18 @@ export class ClassViewWebViewProvider implements vscode.WebviewViewProvider {
                 for (const field of cls.fields) {
                     memberItems.push({
                         label: field.name,
-                        icons: this.makeIcons("error"),
+                        icons: this.makeIcons("symbol-field"),
                     });
                 }
                 for (const method of cls.methods) {
                     memberItems.push({
                         label: method.name,
-                        icons: this.makeIcons("error"),
+                        icons: this.makeIcons("symbol-method"),
                     });
                 }
                 items.push({
                     label: cls.fullName,
-                    icons: this.makeIcons("error"),
+                    icons: this.makeIcons("symbol-class"),
                     subItems: memberItems
                 });
             }

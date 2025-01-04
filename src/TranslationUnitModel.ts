@@ -48,6 +48,7 @@ export class ClassModel {
 
     constructor(name: string, public fullName: string, methods: MethodModel[], fields: FieldModel[], extra: IClassAST) {
         this.name = ClassModel.trimClassName(name);
+        this.fullName = ClassModel.trimClassName(fullName);
         this.methods = methods;
         this.fields = fields;
         this.extra = extra;

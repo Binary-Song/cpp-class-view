@@ -95,7 +95,7 @@ class ExtensionMain implements ExtensionInterface {
 		if (res.result === undefined) {
 			return this.createError("Unknown error.");
 		}
-		return { type: "ok", val: res.result };
+		return { type: "ok", fileName: file, classes: res.result };
 	}
 
 	showOutputPanel() {
@@ -113,10 +113,16 @@ export async function activate(context: vscode.ExtensionContext) {
 		await vscode.window.showErrorMessage(`Failed to initialize extension.`, "OK");
 		return;
 	}
-	const model_res = await ext.getModel();
+	const model = await ext.getModel();
+	const webviewProv = await ClassViewWebViewProvider.create(context, model);
 	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider("cpp-class-view.classView", new ClassViewWebViewProvider(context, model_res))
+		vscode.window.registerWebviewViewProvider("cpp-class-view.classView", webviewProv)
 	);
+	context.subscriptions.push(vscode.commands.registerCommand('cpp-class-view.refreshClassView',
+		async () => {
+			const model = await ext.getModel();
+			await webviewProv.setModel(model);
+		}));
 }
 
 export function deactivate() { }

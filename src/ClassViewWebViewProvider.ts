@@ -1,65 +1,105 @@
 import { TranslationUnitModel } from "./TranslationUnitModel";
 import * as vscode from 'vscode';
+import * as vsce from './vscode-elements';
 
 export class ClassViewWebViewProvider implements vscode.WebviewViewProvider {
     private view?: vscode.WebviewView;
 
-    constructor(private readonly context: vscode.ExtensionContext, private _model: TranslationUnitModel) { }
+    private constructor(
+        private readonly context: vscode.ExtensionContext,
+        private _model: TranslationUnitModel,
+        private htmlFileContent: string,
+        private cssFileContent: string,
+        private uri_replacements: Map<string, vscode.Uri>,
+        private codiconDir: vscode.Uri) {
+    }
 
-    resolveWebviewView(webviewView: vscode.WebviewView) {
+    static async create(context: vscode.ExtensionContext,
+        _model: TranslationUnitModel) {
+        let htmlFileContent = await ClassViewWebViewProvider.readMediaFile('index.html', context);
+        const node_modules = vscode.Uri.joinPath(context.extensionUri, 'node_modules');
+        const html_replacements = new Map([
+            ["vscode_elements_bundled_uri", vscode.Uri.joinPath(node_modules, '@vscode-elements/elements/dist/bundled.js')],
+            ["codicon_path", vscode.Uri.joinPath(node_modules, '@vscode/codicons/dist/codicon.css')],
+        ]);
+        const codiconDir = vscode.Uri.joinPath(node_modules, '@vscode/codicons/src/icons');
+        const cssFileContent = await ClassViewWebViewProvider.readMediaFile('style.css', context);
+        return new ClassViewWebViewProvider(context, _model, htmlFileContent, cssFileContent, html_replacements, codiconDir);
+    }
+
+    async resolveWebviewView(webviewView: vscode.WebviewView) {
         this.view = webviewView;
-        webviewView.webview.options = {
-            enableScripts: true
-        };
-        webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
-        return Promise.resolve();
+        await this.update();
     }
 
     public get model() {
         return this._model;
     }
 
-    public set model(value) {
+    public async setModel(value: TranslationUnitModel) {
         this._model = value;
-        this.update();
+        await this.update();
     }
 
-    private getHtmlForWebview(webview: vscode.Webview): string {
-        const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'src', 'media', 'style.css'));
-        let contentHtml = "";
+    private makeIcons(value: string): vsce.TreeItemIconConfig {
+        const path = `${this.codiconDir}/${value}.svg`;
+        return { branch: value, leaf: value, open: value };
+    }
+
+    private getTreeData(webview: vscode.Webview): vsce.TreeItem[] {
+        let items: vsce.TreeItem[] = [];
         if (this.model.type === "err") {
-            contentHtml += `<div class="error-entry"> ${this.model.err} </div>`;
+            items.push({
+                label: '${this.model.err}',
+                icons: this.makeIcons("error"),
+            });
         } else {
-            let classHtml = "";
-            for (const cls of this.model.val) {
-                let membersHtml = "";
+            for (const cls of this.model.classes) {
+                let memberItems : vsce.TreeItem[] = [];
                 for (const field of cls.fields) {
-                    membersHtml += `<div class="field-entry"> ${field.name} </div>`;
+                    memberItems.push({
+                        label: field.name,
+                        icons: this.makeIcons("error"),
+                    });
                 }
                 for (const method of cls.methods) {
-                    membersHtml += `<div class="method-entry"> ${method.name} </div>`;
+                    memberItems.push({
+                        label: method.name,
+                        icons: this.makeIcons("error"),
+                    });
                 }
-                classHtml += `<div class="class-entry"> ${cls.name} ${membersHtml} </div>`;
+                items.push({
+                    label: cls.fullName,
+                    icons: this.makeIcons("error"),
+                    subItems: memberItems
+                });
             }
-            contentHtml += classHtml;
         }
-        return `<!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Class View</title>
-    <link href="${styleUri}" rel="stylesheet">
-  </head>
-  <body>
-    ${contentHtml} 
-  </body>
-  </html>`;
+        return items;
+    }
+
+    private static async readMediaFile(file: string, context: vscode.ExtensionContext): Promise<string> {
+        const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(context.extensionUri, 'src', 'media', file));
+        const str = Buffer.from(bytes).toString('utf8');
+        return str;
     }
 
     public update() {
         if (this.view) {
-            this.view.webview.html = this.getHtmlForWebview(this.view.webview);
+            const webview = this.view.webview;
+            webview.options = {
+                enableScripts: true
+            };
+            let content = this.htmlFileContent;
+            for (const [key, value] of this.uri_replacements) {
+                content = content.replaceAll(`{{${key}}}`, webview.asWebviewUri(value).toString());
+            }
+            webview.html = content;
+            webview.postMessage({
+                command: 'update_data',
+                target: "main-tree",
+                data: this.getTreeData(webview)
+            });
         }
     }
 }

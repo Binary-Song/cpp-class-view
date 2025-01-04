@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class View</title>
+    <style id="stylesheet"></style>
+    <script src="{{vscode_elements_bundled_uri}}" type="module"></script>
+    <link rel="stylesheet" href="{{codicon_path}}" id="vscode-codicon-stylesheet" />
+</head>
+
+<body>
+    <vscode-tree id="main-tree">
+    </vscode-tree>
+    <script>
+        const vscode = acquireVsCodeApi();
+        window.addEventListener('message', event => {
+            const message = event.data;
+            console.log("ctrl msg recvd = " + JSON.stringify(message))
+            switch (message.command) {
+                case 'update_data':
+                    updateData(message);
+                    break;
+            }
+        });
+
+        function updateStylesheet(content) {
+            const stylesheet = document.getElementById('stylesheet');
+            stylesheet.innerHTML = content;
+        }
+
+        function updateData(msg) {
+            const target = document.getElementById(msg.target);
+            console.log("setting data = " + JSON.stringify(msg.data))
+            target.data = msg.data;
+        }
+    </script>
+</body>
+
+</html>

@@ -1,4 +1,5 @@
 import { assert } from "console";
+import { EventEmitter } from "stream";
 
 export interface IMethodAST {
     virtual?: boolean;
@@ -16,21 +17,9 @@ export class MethodModel {
     name: string;
     extra: IMethodAST;
 
-    constructor(name: string, extra: IMethodAST) {
+    constructor(name: string, public fullName: string, extra: IMethodAST) {
         this.name = name;
         this.extra = extra;
-    }
-
-    get label(): string {
-        return `${this.name}`;
-    }
-
-    get description(): string {
-        let desc = "";
-        if (this.extra.type) {
-            desc += (this.extra.type.qualType ?? "");
-        }
-        return desc.trim();
     }
 }
 export interface IFieldAST {
@@ -39,10 +28,6 @@ export interface IFieldAST {
 
 export class FieldModel {
     constructor(public name: string, public extra: IFieldAST) {
-    }
-
-    get label(): string {
-        return `${this.name}`;
     }
 }
 
@@ -62,18 +47,10 @@ export class ClassModel {
     extra: IClassAST;
 
     constructor(name: string, public fullName: string, methods: MethodModel[], fields: FieldModel[], extra: IClassAST) {
-        this.name = name;
+        this.name = ClassModel.trimClassName(name);
         this.methods = methods;
         this.fields = fields;
         this.extra = extra;
-    }
-
-    get label() {
-        return this.name;
-    }
-
-    get description() {
-        return "";
     }
 
     static trimClassName(name: string) {
@@ -108,4 +85,9 @@ export class ClassModel {
     }
 }
 
-export type TranslationUnitModel = { type: "err", err: string } | { type: "ok", val: ClassModel[] };
+export type TranslationUnitModel = { type: "err", err: string } |
+{
+    type: "ok",
+    fileName: string,
+    classes: ClassModel[]
+};

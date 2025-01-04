@@ -13,15 +13,16 @@ export class ASTWalkContext {
 
 export class ASTWalker {
 
+    private context: ASTWalkContext = new ASTWalkContext();
+
     constructor(private tools: ClangTools) { }
 
-    private async visit(ast: any, context: ASTWalkContext): Promise<{ context: ASTWalkContext, cleanUp?: (context: ASTWalkContext) => Promise<void> }> {
+    private async visit(ast: any): Promise<{ cleanUp?: () => Promise<void> }> {
         if (ast.kind === "NamespaceDecl") {
-            context.qualifierStack.push(ast.name);
+            this.context.qualifierStack.push(ast.name);
             return {
-                context: context,
-                cleanUp: (context) => {
-                    context.qualifierStack.pop();
+                cleanUp: () => {
+                    this.context.qualifierStack.pop();
                     return Promise.resolve();
                 }
             };
@@ -29,18 +30,17 @@ export class ASTWalker {
         else if (ast.kind === "CXXRecordDecl") {
             // An implicit CXXRecordDecl member with the same name as its enclosing class is always created for some reason.
             // Ignore it.
-            if (ast.name === context.classStack.at(-1)?.name) {
-                return { context: context };
+            if (ast.name === this.context.classStack.at(-1)?.name) {
+                return {};
             }
-            const className = context.qualifierStack.join("::") + "::" + ast.name;
-            const thisClass = new ClassModel(ast.name, className, [], [], ast);
-            context.classStack.push(thisClass);
+            let fullName = this.context.qualifierStack.join("::") + "::" + ast.name;
+            const thisClass = new ClassModel(ast.name, fullName, [], [], ast);
+            this.context.classStack.push(thisClass);
             return {
-                context: context,
-                cleanUp: (context: ASTWalkContext) => {
-                    const lastClass = context.classStack.at(-1);
+                cleanUp: () => {
+                    const lastClass = this.context.classStack.at(-1);
                     if (lastClass) {
-                        context.result.push(lastClass);
+                        this.context.result.push(lastClass);
                     }
                     return Promise.resolve();
                 }
@@ -57,34 +57,33 @@ export class ASTWalker {
             } else if (ast.kind === "CXXConstructorDecl") {
                 ast.isCtor = true;
             }
-            context.classStack.at(-1)?.methods.push(new MethodModel(demangledName, ast));
+            this.context.classStack.at(-1)?.methods.push(new MethodModel(memberName, demangledName, ast));
         }
         else if (ast.kind === "FieldDecl") {
-            context.classStack.at(-1)?.fields.push(new FieldModel(ast.name, ast));
+            this.context.classStack.at(-1)?.fields.push(new FieldModel(ast.name, ast));
         }
-        return { context: context };
+        return {};
     }
 
-    private async walkRecursive(ast: any, context: ASTWalkContext) {
+    private async walkRecursive(ast: any) {
         // modify context for children
-        let result = await this.visit(ast, context);
-        context = result.context;
+        let result = await this.visit(ast);
         // walk thru children
         if (ast.inner) {
             for (let node of ast.inner) {
-                await this.walkRecursive(node, context);
+                await this.walkRecursive(node);
             }
         }
         // post visit (save result)
         if (result.cleanUp) {
-            await result.cleanUp(context);
+            await result.cleanUp();
         }
     }
 
     private async walk(ast: any): Promise<ClassModel[]> {
-        let context: ASTWalkContext = new ASTWalkContext();
-        await this.walkRecursive(ast, context);
-        return context.result;
+        this.context = new ASTWalkContext();
+        await this.walkRecursive(ast);
+        return this.context.result;
     }
 
     async collectClasses(ast: any): Promise<ASTWalkResult<ClassModel[]>> {

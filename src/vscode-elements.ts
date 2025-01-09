@@ -65,10 +65,10 @@ export interface TreeItem {
   decorations?: TreeItemDecoration[];
 }
 
-type ItemType = 'branch' | 'leaf';
+export type ItemType = 'branch' | 'leaf';
 
 /** Event payload of the `vsc-select` event. */
-interface SelectEventDetail {
+export interface SelectEventDetail {
   /** Icon configuration of the clicked item */
   icons: TreeItemIconConfig | undefined | boolean;
   /** Is item type branch or leaf. */

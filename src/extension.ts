@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import * as path from 'path';
 import { ClangTools } from './ClangTools';
 import { ExtensionInterface } from './ExtensionInterface';
-import { ClassViewProvider } from './ClassViewWebViewProvider';
+import { ClassViewProvider as ViewProvider } from './ViewProvider';
 import { TranslationUnitModel } from './TranslationUnitModel';
 import { ASTWalker } from './ASTWalker';
 
@@ -117,14 +116,17 @@ export async function activate(context: vscode.ExtensionContext) {
 		return;
 	}
 	const model = await ext.getModel();
-	const webviewProv = await ClassViewProvider.create(context, model);
+	const viewProvider = await ViewProvider.create(context, model);
 	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider("cpp-class-view.classView", webviewProv)
+		vscode.window.registerWebviewViewProvider("cpp-class-view.classView", viewProvider.getClassViewProvider())
+	);
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider("cpp-class-view.detailsView", viewProvider.getDetailsViewProvider())
 	);
 	context.subscriptions.push(vscode.commands.registerCommand('cpp-class-view.refreshClassView',
 		async () => {
 			const model = await ext.getModel();
-			await webviewProv.setModel(model);
+			await viewProvider.setModel(model);
 		}));
 }
 

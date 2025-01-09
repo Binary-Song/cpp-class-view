@@ -5,8 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Class View</title>
-    <script src="{{vscode_elements_bundled_uri}}" type="module"></script>
-    <link rel="stylesheet" type="text/css" href="{{codicon_css_path}}" id="vscode-codicon-stylesheet" />
+    <script src="{{node_modules_dir}}/@vscode-elements/elements/dist/bundled.js" type="module"></script>
+    <link rel="stylesheet" type="text/css" href="{{node_modules_dir}}/@vscode/codicons/dist/codicon.css" id="vscode-codicon-stylesheet" />
+
 </head>
 
 <body>
@@ -51,35 +52,47 @@
             // others
             ["error", "--vscode-problemsErrorIcon-foreground"]
         ];
-
-
         const vscode = acquireVsCodeApi();
+        setTreeActions();
         window.addEventListener('message', event => {
             const message = event.data;
-            console.log("ctrl msg recvd = " + JSON.stringify(message))
             switch (message.command) {
-                case 'update_data':
+                case 'set_data':
                     updateData(message);
-                    // fix: `vscode-icon`s are gray. This adds the color back.
-                    const target = document.getElementById("main-tree");
-                    if (target.shadowRoot) {
-                        console.log("setting icon color")
-                        const root = target.shadowRoot;
-                        const style = document.createElement('style');
-                        for (const iconMapping of iconMappings) {
-                            const iconName = iconMapping[0];
-                            const iconColorProperty = iconMapping[1];
-                            style.textContent += `
-                                vscode-icon[name="${iconName}"].theme-icon {
-                                    color: var(${iconColorProperty}) !important;
-                                }
-                            `;
-                        }
-                        root.appendChild(style);
-                    }
+                    fixItemColor();
                     break;
             }
         });
+        function setTreeActions() {
+            const tree = document.getElementById("main-tree");
+            tree.addEventListener("vsc-tree-select", (event) => {
+                console.log("yeh: vsc-tree-select");
+                console.log(event);
+                vscode.postMessage({
+                        command: 'tree_item_selected',
+                        value: event.detail.value,
+                    })
+            });
+        }
+        // fix: `vscode-icon`s are gray. This adds the color back.
+        function fixItemColor() {
+            const target = document.getElementById("main-tree");
+            if (target.shadowRoot) {
+                console.log("setting icon color")
+                const root = target.shadowRoot;
+                const style = document.createElement('style');
+                for (const iconMapping of iconMappings) {
+                    const iconName = iconMapping[0];
+                    const iconColorProperty = iconMapping[1];
+                    style.textContent += `
+                        vscode-icon[name="${iconName}"].theme-icon {
+                            color: var(${iconColorProperty}) !important;
+                        }
+                    `;
+                }
+                root.appendChild(style);
+            }
+        }
         function updateData(msg) {
             const target = document.getElementById(msg.target);
             console.log("setting data = " + JSON.stringify(msg.data))

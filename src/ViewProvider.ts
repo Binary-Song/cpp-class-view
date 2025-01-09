@@ -1,4 +1,4 @@
-import { FieldModel, MemberModel, MethodModel, TranslationUnitModel } from "./TranslationUnitModel";
+import { FieldModel, MemberModel, MethodModel, ClassModel, TranslationUnitModel } from "./TranslationUnitModel";
 import * as vscode from 'vscode';
 import * as vsce from './vscode-elements';
 
@@ -36,35 +36,106 @@ class Utils {
     };
 }
 
-export class ClassViewProvider implements vscode.WebviewViewProvider {
-    private view?: vscode.WebviewView;
+interface DetailView {
+    get html(): string;
+}
+
+class FieldDetailView implements DetailView {
+
+    constructor(private readonly fieldModel: FieldModel) {
+    }
+
+    get html(): string {
+        return `<h1>Field <code>${this.fieldModel.name}</code></h1>` +
+            `<p>Type: <code>${this.fieldModel.extra.type?.qualType}</code></p>`;
+    }
+}
+
+class MethodDetailView implements DetailView {
+
+    constructor(private readonly methodModel: MethodModel) {
+    }
+
+    get html(): string {
+        return `<h1>Method <code>${this.methodModel.name}</code></h1>` +
+            `<p>Type: <code>${this.methodModel.extra.type?.qualType}</code></p>`;
+    }
+}
+
+class DetailViews {
+    data: DetailView[] = [];
+
+    public add(view: DetailView): string {
+        this.data.push(view);
+        return (this.data.length - 1).toString();
+    }
+
+    public allViews() {
+        return this.data;
+    }
+
+    public at(key: string) {
+        return this.data[parseInt(key)];
+    }
+}
+
+class SimpleWebViewProvider implements vscode.WebviewViewProvider {
+    constructor(private cb: (webviewView: vscode.WebviewView) => Promise<undefined>) {
+    }
+
+    async resolveWebviewView(webviewView: vscode.WebviewView) {
+        await this.cb(webviewView);
+    }
+}
+
+export class ClassViewProvider {
+    private treeView?: vscode.WebviewView;
+    private detailsView?: vscode.WebviewView;
+    private detailData?: DetailViews;
 
     private constructor(
         private readonly context: vscode.ExtensionContext,
         private _model: TranslationUnitModel,
-        private htmlFileContent: string,
-        private cssFileContent: string,
+        private treeViewHtml: string,
+        private detailsViewHtml: string,
         private uri_replacements: Map<string, vscode.Uri>,
         private codiconDir: vscode.Uri) {
     }
 
     static async create(context: vscode.ExtensionContext,
         _model: TranslationUnitModel) {
-        let htmlFileContent = await ClassViewProvider.readMediaFile('index.html', context);
+        let treeViewHtml = await ClassViewProvider.readMediaFile('treeView.html', context);
+        let detailsViewHtml = await ClassViewProvider.readMediaFile('detailsView.html', context);
         const node_modules = vscode.Uri.joinPath(context.extensionUri, 'node_modules');
         const html_replacements = new Map([
-            ["vscode_elements_bundled_uri", vscode.Uri.joinPath(node_modules, '@vscode-elements/elements/dist/bundled.js')],
-            ["codicon_css_path", vscode.Uri.joinPath(node_modules, '@vscode/codicons/dist/codicon.css')],
+            ["node_modules_dir", node_modules],
         ]);
         const codiconDir = vscode.Uri.joinPath(node_modules, '@vscode/codicons/src/icons');
-        const cssFileContent = await ClassViewProvider.readMediaFile('style.css', context);
-        return new ClassViewProvider(context, _model, htmlFileContent, cssFileContent, html_replacements, codiconDir);
+        return new ClassViewProvider(context, _model, treeViewHtml, detailsViewHtml, html_replacements, codiconDir);
     }
 
-    async resolveWebviewView(webviewView: vscode.WebviewView) {
-        this.view = webviewView;
-        this.view.onDidChangeVisibility(async () => { if (this.view?.visible) { this.update(); } });
-        await this.update();
+    public getClassViewProvider() {
+        return new SimpleWebViewProvider(async (webviewView) => {
+            this.treeView = webviewView;
+            this.treeView.onDidChangeVisibility(async () => { if (this.treeView?.visible) { this.update(); } });
+            this.treeView.webview.onDidReceiveMessage(message => {
+                let msg = message as {
+                    command: "tree_item_selected",
+                    value: string,
+                };
+                this.detailsView?.webview.postMessage({
+                    command: 'set_content',
+                    content: this.detailData?.at(msg.value)?.html
+                });
+            });
+        });
+    }
+
+    public getDetailsViewProvider() {
+        return new SimpleWebViewProvider(async (webviewView) => {
+            this.detailsView = webviewView;
+            this.detailsView.onDidChangeVisibility(async () => { if (this.detailsView?.visible) { this.update(); } });
+        });
     }
 
     public get model() {
@@ -77,7 +148,6 @@ export class ClassViewProvider implements vscode.WebviewViewProvider {
     }
 
     private makeIcons(value: string): vsce.TreeItemIconConfig {
-        const path = `${this.codiconDir}/${value}.svg`;
         return { branch: value, leaf: value, open: value };
     }
 
@@ -89,15 +159,15 @@ export class ClassViewProvider implements vscode.WebviewViewProvider {
         return decor;
     }
 
-    private getTreeData(webview: vscode.Webview): vsce.TreeItem[] {
+    private getViewData(): { items: vsce.TreeItem[], detailViews: DetailViews } {
         let items: vsce.TreeItem[] = [];
+        let detailViews: DetailViews = new DetailViews();
         if (this.model.type === "err") {
             items.push({
                 label: `${this.model.err}`,
                 icons: this.makeIcons("error"),
             });
         } else {
-
             for (const cls of this.model.classes) {
                 let memberItems: vsce.TreeItem[] = [];
 
@@ -108,6 +178,7 @@ export class ClassViewProvider implements vscode.WebviewViewProvider {
                         icons: this.makeIcons("symbol-field"),
                         description: ": " + field.extra.type?.qualType,
                         decorations: this.getMemberDecor(field),
+                        value: detailViews.add(new FieldDetailView(field))
                     });
                 }
 
@@ -124,7 +195,8 @@ export class ClassViewProvider implements vscode.WebviewViewProvider {
                         label: method.name,
                         icons: this.makeIcons("symbol-method"),
                         description: ": " + method.extra.type?.qualType,
-                        decorations: decor
+                        decorations: decor,
+                        value: detailViews.add(new MethodDetailView(method))
                     });
                 }
                 items.push({
@@ -135,7 +207,7 @@ export class ClassViewProvider implements vscode.WebviewViewProvider {
                 });
             }
         }
-        return items;
+        return { items, detailViews };
     }
 
     private static async readMediaFile(file: string, context: vscode.ExtensionContext): Promise<string> {
@@ -145,22 +217,30 @@ export class ClassViewProvider implements vscode.WebviewViewProvider {
     }
 
     public update() {
-        if (this.view) {
-            const webview = this.view.webview;
+
+        let data: [vscode.WebviewView | undefined, string][] = [[this.treeView, this.treeViewHtml], [this.detailsView, this.detailsViewHtml]];
+        for (let [view, html] of data) {
+            if (!view) {
+                return;
+            }
+            const webview = view.webview;
             webview.options = {
                 enableScripts: true
             };
-            let content = this.htmlFileContent;
+            let content = html;
             for (const [key, value] of this.uri_replacements) {
                 content = content.replaceAll(`{{${key}}}`, webview.asWebviewUri(value).toString());
             }
             webview.html = content;
-            webview.postMessage({
-                command: 'update_data',
-                target: "main-tree",
-                data: this.getTreeData(webview)
-            });
         }
+
+        const viewData = this.getViewData();
+        this.treeView?.webview.postMessage({
+            command: 'set_data',
+            target: "main-tree",
+            data: viewData.items
+        });
+
+        this.detailData = viewData.detailViews;
     }
 }
-
